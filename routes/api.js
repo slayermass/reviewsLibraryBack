@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const MongoClient = require('mongodb').MongoClient;
 const uri = process.env.DB_URI;
-const client = new MongoClient(uri, {useNewUrlParser: true});
+const client = new MongoClient(uri, {useNewUrlParser: true, useUnifiedTopology: true});
 
 client.connect(err => {
   if (err) {
@@ -13,21 +13,9 @@ client.connect(err => {
   }
 })
 
-
-/** GET users listing. */
-router.get('/', (req, res) => {
-  const reviews = require('../json/mock.json').reviews;
-
-  const response = reviews.filter((item) => {
-    return item.g.toLowerCase().includes('a') || item.a.toLowerCase().includes('a');
-  });
-
-  res.json(response);
-});
-
 /** search in db */
 router.get('/find', (req, res) => {
-  const {album, group, rating} = req.query;
+  const {album, group, rating, perpage = 10, page = 1} = req.query;
   const search = {};
 
   if (album) {
@@ -43,9 +31,14 @@ router.get('/find', (req, res) => {
   if (client.isConnected()) {
     const collection = client.db("reviews").collection("reviews");
 
-    collection.find(search).toArray((err, docs) => {
-      res.json(docs);
-    });
+    collection
+      .find(search)
+      .sort({ d: -1 })
+      .skip(page - 1)
+      .limit(+perpage)
+      .toArray((err, docs) => {
+        res.json(docs);
+      });
   } else {
     res.status(500);
     res.send('no connection to db');
