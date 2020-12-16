@@ -48,11 +48,12 @@ app.use('*', (req, res, next) => {
             req.user = user;
             next();
           }
-          client.close();
         })
         .catch(() => {
           res.clearCookie(AUTH_COOKIE_NAME);
           res.status(500).send('error finding user');
+        })
+        .finally(() => {
           client.close();
         });
     });
