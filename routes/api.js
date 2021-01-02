@@ -160,7 +160,7 @@ router.get('/review/:id', (req, res) => {
 /** search in db reviews list */
 router.get('/reviews', (req, res) => {
   const {
-    album, group, rating, comment,
+    album, group, rating, comment, sort,
     perPage = 10, page = 1,
   } = req.query;
 
@@ -173,8 +173,9 @@ router.get('/reviews', (req, res) => {
 
   const {email: userEmail} = req.user;
   const search = {
-    u: userEmail
+    u: userEmail,
   };
+  let sortSearch = {};
 
   if (album) {
     search.a = {$regex: album.trim().toLowerCase(), $options: "gm"};
@@ -188,6 +189,23 @@ router.get('/reviews', (req, res) => {
   if (+rating) {
     search.r = +rating;
   }
+  /** compound sort requires index */
+  if (sort) {
+    if (sort === 'dateDesc') {
+      sortSearch.d = -1
+    }
+    if (sort === 'dateAsc') {
+      sortSearch.d = 1;
+    }
+    if (sort === 'ratingAsc') {
+      sortSearch.r = 1;
+    }
+    if (sort === 'ratingDesc') {
+      sortSearch.r = -1;
+    }
+  } else {
+    sortSearch.d = -1
+  }
 
   if (isDbConnected(res)) {
     const collection = client.db("reviews").collection("reviews");
@@ -195,7 +213,7 @@ router.get('/reviews', (req, res) => {
     const dataPromise = new Promise((resolve) => {
       collection
         .find(search)
-        .sort({d: -1})
+        .sort(sortSearch)
         .skip((page - 1) * perPage)
         .limit(perPagePrepared)
         .toArray((err, docs) => {
