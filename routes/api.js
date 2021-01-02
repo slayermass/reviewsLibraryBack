@@ -37,7 +37,10 @@ router.post('/login', (req, res) => {
         .then((user) => {
           const cookieValue = CryptoJS.AES.encrypt(JSON.stringify(user.email), AUTH_COOKIE_SECRET).toString();
 
-          res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {maxAge: 31 * 24 * 3600000}).send();
+          res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
+            maxAge: 31 * 24 * 3600000,
+            SameSite: 'None'
+          }).send();
         })
         .catch(() => {
           res.status(400).send('no such user');
