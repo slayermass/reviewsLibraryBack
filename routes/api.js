@@ -6,6 +6,7 @@ const CryptoJS = require("crypto-js");
 const {AUTH_COOKIE_NAME, AUTH_COOKIE_SECRET} = require('../config');
 
 const MongoClient = require('mongodb').MongoClient;
+const ObjectId = require('mongodb').ObjectId;
 const uri = process.env.DB_URI;
 const client = new MongoClient(uri, {useNewUrlParser: true, useUnifiedTopology: true});
 
@@ -14,6 +15,11 @@ client.connect(err => {
     console.error(err);
   }
 });
+
+/** check auth */
+router.get('/me', (req, res) => {
+  res.status(202).send({ email: req.user.email });
+})
 
 /** login auth */
 router.post('/login', (req, res) => {
@@ -31,7 +37,7 @@ router.post('/login', (req, res) => {
         .then((user) => {
           const cookieValue = CryptoJS.AES.encrypt(JSON.stringify(user.email), AUTH_COOKIE_SECRET).toString();
 
-          res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {maxAge: 7 * 24 * 3600000}).send();
+          res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {maxAge: 31 * 24 * 3600000}).send();
         })
         .catch(() => {
           res.status(400).send('no such user');
@@ -43,6 +49,81 @@ router.post('/login', (req, res) => {
     res.status(400).send('needed email and password');
   }
 });
+
+
+/** create review */
+router.post('/review', (req, res) => {
+  const {
+    album, group, rating, comment, author, date,
+  } = req.body;
+
+  // TODO more validation (trim)
+  if (album && group && rating && comment && author && date) {
+    if (client.isConnected()) {
+      const collection = client.db("reviews").collection("reviews");
+
+      collection.insertOne({
+        a: album,
+        g: group,
+        r: rating,
+        c: comment,
+        u: author,
+        d: date
+      })
+        .then((response) => {
+          res.status(200).send({
+            id: response.insertedId
+          })
+        })
+        .catch((e) => {
+          console.error('errer', e);
+          res.status(500).send(e);
+        })
+    } else {
+      res.status(500).send('no connection to db');
+    }
+  } else {
+    res.status(400).send('no required parameters to create');
+  }
+});
+
+
+/** update review */
+router.put('/review/:id', (req, res) => {
+  const {
+    album, group, rating, comment, author, date,
+  } = req.body;
+  const { id } = req.params;
+
+  // TODO more validation
+  if (album && group && rating && comment && author && date && id) {
+    if (client.isConnected()) {
+      const collection = client.db("reviews").collection("reviews");
+
+      collection.findOneAndUpdate({ _id: ObjectId(id) },{
+        $set: {
+          a: album,
+          g: group,
+          r: rating,
+          c: comment,
+          u: author,
+          d: date
+        },
+      })
+        .then((response) => {
+          res.status(200).send(response.value)
+        })
+        .catch((e) => {
+          res.status(500).send(e);
+        })
+    } else {
+      res.status(500).send('no connection to db');
+    }
+  } else {
+    res.status(400).send('no required parameters to create');
+  }
+});
+
 
 /** search in db */
 router.get('/find', (req, res) => {
@@ -72,7 +153,7 @@ router.get('/find', (req, res) => {
   if (comment) {
     search.c = {$regex: comment.trim().toLowerCase(), $options: "gm"};
   }
-  if (rating) {
+  if (+rating) {
     search.r = +rating;
   }
 
@@ -82,10 +163,14 @@ router.get('/find', (req, res) => {
     collection
       .find(search)
       .sort({d: -1})
-      .skip(page - 1)
+      .skip((page - 1) * perPage)
       .limit(perPagePrepared)
       .toArray((err, docs) => {
-        res.json(docs);
+        if (err) {
+          res.status(500).send(err);
+        } else {
+          res.json(docs);
+        }
       });
   } else {
     res.status(500).send('no connection to db');

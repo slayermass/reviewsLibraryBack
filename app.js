@@ -1,6 +1,7 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const cors = require('cors')
 
 const CryptoJS = require("crypto-js");
 const {AUTH_COOKIE_NAME, AUTH_COOKIE_SECRET} = require('./config');
@@ -13,6 +14,10 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser('ms'));
+app.use(cors({ origin: [
+  'http://localhost:3000',
+  'https://music-library-4ad49.web.app'
+], credentials: true }));
 
 app.use('*', (req, res, next) => {
   if (req.baseUrl === '/api/login') { // на /логин всегда можно
