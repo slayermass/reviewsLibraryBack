@@ -39,7 +39,7 @@ router.post('/login', (req, res) => {
 
           res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
             maxAge: 31 * 24 * 3600000,
-            SameSite: 'none',
+            sameSite: 'none',
             secure: true,
           }).send();
         })
