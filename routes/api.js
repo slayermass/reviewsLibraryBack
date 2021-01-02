@@ -39,10 +39,11 @@ router.post('/login', (req, res) => {
 
           res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
             maxAge: 31 * 24 * 3600000,
-            SameSite: 'None'
+            sameSite: 'lax'
           }).send();
         })
-        .catch(() => {
+        .catch((e) => {
+          console.log(e);
           res.status(400).send('no such user');
         });
     } else {
