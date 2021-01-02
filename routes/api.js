@@ -16,9 +16,19 @@ client.connect(err => {
   }
 });
 
+/** check if connection to db is active */
+const isDbConnected = (res) => {
+  if (client.isConnected()) {
+    return true;
+  } else {
+    res.status(500).send('no connection to db');
+    return false
+  }
+}
+
 /** check auth */
 router.get('/me', (req, res) => {
-  res.status(202).send({ email: req.user.email });
+  res.status(200).send({email: req.user.email});
 })
 
 /** login auth */
@@ -26,7 +36,7 @@ router.post('/login', (req, res) => {
   const {email, password} = req.body;
 
   if (email && password) {
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
     if (client.isConnected()) {
@@ -35,20 +45,21 @@ router.post('/login', (req, res) => {
       collection
         .findOne({email: cleanEmail, password: cleanPassword})
         .then((user) => {
-          const cookieValue = CryptoJS.AES.encrypt(JSON.stringify(user.email), AUTH_COOKIE_SECRET).toString();
+          if (user) {
+            const cookieValue = CryptoJS.AES.encrypt(JSON.stringify(user.email), AUTH_COOKIE_SECRET).toString();
 
-          res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
-            maxAge: 31 * 24 * 3600000,
-            sameSite: 'none',
-            secure: true,
-          }).send();
+            res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
+              maxAge: 31 * 24 * 3600000,
+              sameSite: 'none',
+              secure: true,
+            }).send('logged in');
+          } else {
+            res.status(400).send('no such user');
+          }
         })
         .catch((e) => {
-          console.log(e);
-          res.status(400).send('no such user');
+          res.status(500).send(e.toString());
         });
-    } else {
-      res.status(500).send('no connection to db');
     }
   } else {
     res.status(400).send('needed email and password');
@@ -56,7 +67,7 @@ router.post('/login', (req, res) => {
 });
 
 
-/** create review */
+/** create a review */
 router.post('/review', (req, res) => {
   const {
     album, group, rating, comment, author, date,
@@ -64,7 +75,7 @@ router.post('/review', (req, res) => {
 
   // TODO more validation (trim)
   if (album && group && rating && comment && author && date) {
-    if (client.isConnected()) {
+    if (isDbConnected(res)) {
       const collection = client.db("reviews").collection("reviews");
 
       collection.insertOne({
@@ -76,7 +87,7 @@ router.post('/review', (req, res) => {
         d: date
       })
         .then((response) => {
-          res.status(200).send({
+          res.send({
             id: response.insertedId
           })
         })
@@ -84,8 +95,6 @@ router.post('/review', (req, res) => {
           console.error('errer', e);
           res.status(500).send(e);
         })
-    } else {
-      res.status(500).send('no connection to db');
     }
   } else {
     res.status(400).send('no required parameters to create');
@@ -93,19 +102,19 @@ router.post('/review', (req, res) => {
 });
 
 
-/** update review */
+/** update a review */
 router.put('/review/:id', (req, res) => {
   const {
     album, group, rating, comment, author, date,
   } = req.body;
-  const { id } = req.params;
+  const {id} = req.params;
 
   // TODO more validation
   if (album && group && rating && comment && author && date && id) {
-    if (client.isConnected()) {
+    if (isDbConnected(res)) {
       const collection = client.db("reviews").collection("reviews");
 
-      collection.findOneAndUpdate({ _id: ObjectId(id) },{
+      collection.findOneAndUpdate({_id: ObjectId(id)}, {
         $set: {
           a: album,
           g: group,
@@ -116,22 +125,40 @@ router.put('/review/:id', (req, res) => {
         },
       })
         .then((response) => {
-          res.status(200).send(response.value)
+          res.send(response.value)
         })
         .catch((e) => {
           res.status(500).send(e);
         })
-    } else {
-      res.status(500).send('no connection to db');
     }
   } else {
     res.status(400).send('no required parameters to create');
   }
 });
 
+/**
+ * search in db a review
+ * @returns model | null
+ */
+router.get('/review/:id', (req, res) => {
+  const {id} = req.params;
 
-/** search in db */
-router.get('/find', (req, res) => {
+  if (isDbConnected(res)) {
+    const collection = client.db("reviews").collection("reviews");
+
+    collection
+      .findOne({_id: ObjectId(id)})
+      .then((model) => {
+        res.json(model)
+      })
+      .catch(() => {
+        res.status(400).send('review is not found');
+      })
+  }
+});
+
+/** search in db reviews list */
+router.get('/reviews', (req, res) => {
   const {
     album, group, rating, comment,
     perPage = 10, page = 1,
@@ -162,23 +189,38 @@ router.get('/find', (req, res) => {
     search.r = +rating;
   }
 
-  if (client.isConnected()) {
+  if (isDbConnected(res)) {
     const collection = client.db("reviews").collection("reviews");
 
-    collection
-      .find(search)
-      .sort({d: -1})
-      .skip((page - 1) * perPage)
-      .limit(perPagePrepared)
-      .toArray((err, docs) => {
-        if (err) {
-          res.status(500).send(err);
+    const dataPromise = new Promise((resolve) => {
+      collection
+        .find(search)
+        .sort({d: -1})
+        .skip((page - 1) * perPage)
+        .limit(perPagePrepared)
+        .toArray((err, docs) => {
+          if (err) {
+            resolve({error: err});
+          } else {
+            resolve({data: docs});
+          }
+        });
+    });
+
+    const amountPromise = collection.countDocuments(search)
+      .catch(() => 0)
+
+    Promise.all([
+      dataPromise,
+      amountPromise
+    ])
+      .then(([data, amount]) => {
+        if (data.error) {
+          res.status(500).send(data.error);
         } else {
-          res.json(docs);
+          res.json({ data: data.data, amount });
         }
-      });
-  } else {
-    res.status(500).send('no connection to db');
+      })
   }
 });
 
@@ -192,7 +234,7 @@ router.get('/find', (req, res) => {
 //       g: data.group,
 //       c: data.comment,
 //       r: data.rating,
-//       d: data.date.value._seconds,
+//       d: new Date(data.date.value._seconds * 1000).toISOString(),
 //       u: data.author,
 //     }
 //   });
