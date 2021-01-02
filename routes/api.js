@@ -39,7 +39,8 @@ router.post('/login', (req, res) => {
 
           res.status(202).cookie(AUTH_COOKIE_NAME, cookieValue, {
             maxAge: 31 * 24 * 3600000,
-            sameSite: 'lax'
+            SameSite: 'None',
+            secure: true,
           }).send();
         })
         .catch((e) => {
