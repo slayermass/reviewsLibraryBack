@@ -81,7 +81,7 @@ router.post('/review', (req, res) => {
       collection.insertOne({
         a: album,
         g: group,
-        r: rating,
+        r: +rating,
         c: comment,
         u: author,
         d: date
@@ -118,7 +118,7 @@ router.put('/review/:id', (req, res) => {
         $set: {
           a: album,
           g: group,
-          r: rating,
+          r: +rating,
           c: comment,
           u: author,
           d: date
