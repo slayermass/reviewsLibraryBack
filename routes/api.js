@@ -242,6 +242,33 @@ router.get('/reviews', (req, res) => {
   }
 });
 
+/** export data */
+router.get('/export', function (req, res) {
+  const collection = client.db("reviews").collection("reviews");
+
+  new Promise((resolve, reject) => {
+    collection
+      .find()
+      .toArray((err, docs) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(docs);
+        }
+      });
+  })
+    .then((data) => {
+      res.setHeader('Content-disposition', 'attachment; filename=export.json');
+      res.setHeader('Content-type', 'application/json');
+      res.write(JSON.stringify(data), () => {
+        res.end();
+      });
+    })
+    .catch((e) => {
+      res.status(500).send(e.toString());
+    });
+});
+
 // router.get('/import', function (req, res, next) {
 //   console.log('starting import...');
 //   const reviews = require('../json/reviews.json');
