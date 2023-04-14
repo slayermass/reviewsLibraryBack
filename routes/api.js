@@ -177,14 +177,18 @@ router.get('/reviews', (req, res) => {
   };
   let sortSearch = {};
 
+  const prepareText = (name) => {
+    return {$regex: name.trim().toLowerCase(), $options: "m"}
+  }
+
   if (album) {
-    search.a = {$regex: album.trim().toLowerCase(), $options: "gm"};
+    search.a = prepareText(album);
   }
   if (group) {
-    search.g = {$regex: group.trim().toLowerCase(), $options: "gm"};
+    search.g = prepareText(group);
   }
   if (comment) {
-    search.c = {$regex: comment.trim().toLowerCase(), $options: "gm"};
+    search.c = prepareText(comment);
   }
   if (+rating) {
     search.r = +rating;
