@@ -67,6 +67,35 @@ router.post('/login', (req, res) => {
 });
 
 
+router.post('/checkreview', (req, res) => {
+  const {
+    album, group, author,
+  } = req.body;
+
+  if (album && group && author) {
+    if (isDbConnected(res)) {
+      const collection = client.db("reviews").collection("reviews");
+
+      collection.findOne({
+        a: album,
+        g: group,
+        u: author,
+      })
+        .then((response) => {
+          res.send({
+            found: !!response
+          });
+        })
+        .catch((e) => {
+          console.error('errer', e);
+          res.status(500).send(e);
+        })
+    }
+  } else {
+    res.status(400).send('no required parameters to create');
+  }
+});
+
 /** create a review */
 router.post('/review', (req, res) => {
   const {
